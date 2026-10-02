@@ -18,10 +18,11 @@ const HELP = `wiki — 在终端里查看 Wikipedia，内容格式化为 Markdow
   wiki [选项] <关键词...>
 
 选项：
-  -l, --lang <代码>   指定语言版本（默认：zh，自动转为简体）
-                     中文变体：zh-cn（简）/ zh-tw（繁）/ zh-hk / zh-hans / zh-hant
+  -l, --lang <代码>   指定语言版本（默认：zh，简体中文）
+                     中文：默认简体中文；指定 zh-tw 等繁体代码则用繁体中文
                      其他语言：en / ja / fr ...
   -s, --summary       仅显示摘要
+      --no-link       只展示纯文本内容，不生成任何 Markdown 链接
       --no-pager      不分页，直接输出全部内容（也可通过管道重定向）
   -h, --help          显示本帮助
   -v, --version       显示版本号
@@ -31,6 +32,7 @@ const HELP = `wiki — 在终端里查看 Wikipedia，内容格式化为 Markdow
   wiki TypeScript --lang en
   wiki 量子力学 | less
   wiki Rust -l en -s
+  wiki 黑洞 --no-link
 `;
 
 interface CliOptions {
@@ -38,12 +40,14 @@ interface CliOptions {
   lang: string;
   summary: boolean;
   pager: boolean;
+  link: boolean;
 }
 
 function parseArgs(argv: string[]): CliOptions | "help" | "version" {
   let lang = "zh";
   let summary = false;
   let pager = true;
+  let link = true;
   const rest: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -61,6 +65,9 @@ function parseArgs(argv: string[]): CliOptions | "help" | "version" {
         break;
       case "--no-pager":
         pager = false;
+        break;
+      case "--no-link":
+        link = false;
         break;
       case "-l":
       case "--lang": {
@@ -81,7 +88,7 @@ function parseArgs(argv: string[]): CliOptions | "help" | "version" {
   const query = rest.join(" ").trim();
   if (!query) return "help";
 
-  return { query, lang, summary, pager };
+  return { query, lang, summary, pager, link };
 }
 
 // 仅在交互式终端下上色，保证管道输出干净
@@ -122,10 +129,12 @@ async function run(): Promise<void> {
       .filter(Boolean)
       .join("\n\n");
   } else {
-    const html = await fetchPageHtml(meta);
-    const markdown = await htmlToMarkdown(html, meta.lang.host);
+    const page = await fetchPageHtml(meta);
+    const markdown = await htmlToMarkdown(page.html, meta.lang.host, {
+      noLink: !parsed.link,
+    });
     body = [
-      `# ${bold(meta.title)}`,
+      `# ${bold(page.title)}`,
       meta.description ? `*${meta.description}*` : "",
       markdown,
       `---\n${dim(meta.url)}`,

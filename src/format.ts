@@ -60,7 +60,10 @@ const REMOVE_SELECTORS: string[] = [
 export async function htmlToMarkdown(
   html: string,
   lang: string,
+  options: { noLink?: boolean } = {},
 ): Promise<string> {
+  const noLink = options.noLink ?? false;
+
   // 1. 用 bun 内置的 HTMLRewriter 流式清理 DOM
   let rewriter = new HTMLRewriter();
   for (const selector of REMOVE_SELECTORS) {
@@ -157,10 +160,14 @@ export async function htmlToMarkdown(
     replacement: () => "",
   });
 
-  // 引用角标：输出干净的 [n](url)，避免 \[1\] 转义
+  // 引用角标：noLink 时输出纯文本 [n]，否则输出干净的 [n](url)
   td.addRule("refCitation", {
     filter: (node) =>
-      node.nodeName === "SUP" && node.classList?.contains("mw-ref"),
+      node.nodeName === "SUP" &&
+      Boolean(
+        node.classList?.contains("mw-ref") ||
+          node.classList?.contains("reference"),
+      ),
     replacement: (_content, node) => {
       const anchor = node.querySelector("a");
       const href = anchor?.getAttribute("href") ?? "";
@@ -168,9 +175,18 @@ export async function htmlToMarkdown(
       const text = (anchor?.textContent ?? "")
         .replace(/[[\]\s]/g, "")
         .trim();
+      if (noLink) return text ? `[${text}]` : "";
       return href ? `[${text}](${href})` : text;
     },
   });
+
+  // noLink：所有链接只保留文本内容，不输出 Markdown 链接语法
+  if (noLink) {
+    td.addRule("plainAnchor", {
+      filter: "a",
+      replacement: (content) => content,
+    });
+  }
 
   // 删掉图片后残留的空链接
   td.addRule("emptyAnchor", {

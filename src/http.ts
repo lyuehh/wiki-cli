@@ -17,7 +17,6 @@ export interface HttpResponse {
 export async function httpGet(
   url: string,
   accept: string,
-  acceptLanguage?: string,
 ): Promise<HttpResponse> {
   let proc: Bun.Subprocess;
   try {
@@ -33,9 +32,6 @@ export async function httpGet(
         "-H",
         `Accept: ${accept}`,
       ];
-    if (acceptLanguage) {
-      cmd.push("-H", `Accept-Language: ${acceptLanguage}`);
-    }
     cmd.push(
       // 在 body 末尾追加状态码，便于同时拿到响应体和状态码
       "-w",
